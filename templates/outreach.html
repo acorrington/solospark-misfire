@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}SoloSpark — Outreach Queue{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Outreach Queue</h1>
+
+<p class="text-sm text-slate-500 mb-4">
+  Pitches for bad-site leads with a deployed preview. Generate drafts, review the copy below,
+  then approve exactly what you want to send. Rate limits (5/hour), dedup and opt-outs are
+  enforced at send time.
+</p>
+
+<div class="flex flex-wrap items-center gap-3 mb-4">
+  <button type="button" id="generate-btn"
+          class="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-blue-500 transition">Generate pitches</button>
+  <button type="button" id="send-selected-btn"
+          class="bg-emerald-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-emerald-500 transition">Send selected</button>
+  <span id="queue-status" class="text-sm text-slate-500"></span>
+</div>
+
+<div class="mb-4 text-sm text-slate-600">
+  {{ rows|length }} awaiting approval &middot; {{ sent_count }} sent &middot; {{ failed_count }} failed (all time)
+</div>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-50 text-left text-slate-500 uppercase text-xs tracking-wide">
+      <tr>
+        <th class="px-4 py-3 w-10"><input type="checkbox" id="select-all" class="align-middle"></th>
+        <th class="px-4 py-3">Business</th>
+        <th class="px-4 py-3">Recipient</th>
+        <th class="px-4 py-3">Subject</th>
+        <th class="px-4 py-3">Generated</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for item in rows %}
+      <tr class="hover:bg-slate-50 align-top">
+        <td class="px-4 py-3"><input type="checkbox" class="row-check" value="{{ item.email.id }}" checked></td>
+        <td class="px-4 py-3">
+          {% if item.business %}
+          <div class="font-medium">{{ item.business.name }}</div>
+          <div class="text-xs text-slate-400">{{ item.business.slug }}{% if item.business.preview_url %} &middot; <a href="{{ item.business.preview_url }}" target="_blank" rel="noopener" class="text-blue-600 hover:underline">preview</a>{% endif %}</div>
+          {% else %}<span class="text-slate-400">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">{{ item.email.recipient }}</td>
+        <td class="px-4 py-3 max-w-md">
+          <div class="truncate" title="{{ item.email.subject }}">{{ item.email.subject or "—" }}</div>
+          <details class="mt-1">
+            <summary class="text-xs text-blue-600 cursor-pointer hover:underline">View body</summary>
+            <pre class="mt-2 bg-slate-50 border rounded p-3 text-xs whitespace-pre-wrap max-h-64 overflow-y-auto">{{ item.email.body }}</pre>
+          </details>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap text-xs text-slate-500">
+          {{ item.email.created_at.strftime("%Y-%m-%d %H:%M") if item.email.created_at else "—" }}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No queued pitches. Click “Generate pitches” to draft outreach for eligible leads.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+(function () {
+  var status = document.getElementById("queue-status");
+
+  function flash(message, isError) {
+    status.textContent = message;
+    status.className = "text-sm " + (isError ? "text-red-600" : "text-slate-500");
+  }
+
+  function postJson(url, body) {
+    var init = { method: "POST" };
+    if (body !== undefined) {
+      init.headers = { "Content-Type": "application/json" };
+      init.body = JSON.stringify(body);
+    }
+    return fetch(url, init).then(function (response) {
+      return response.json().then(function (data) {
+        return { ok: response.ok, data: data };
+      });
+    });
+  }
+
+  var generateBtn = document.getElementById("generate-btn");
+  generateBtn.addEventListener("click", function () {
+    generateBtn.disabled = true;
+    flash("Generating pitches\u2026");
+    postJson("/api/outreach/generate")
+      .then(function (result) {
+        if (!result.ok) {
+          flash(result.data.detail || "Generate failed", true);
+          return;
+        }
+        var parts = ["Queued " + result.data.queued + " pitch(es)"];
+        if (result.data.skipped.length) parts.push(result.data.skipped.length + " skipped");
+        if (result.data.failed.length) parts.push(result.data.failed.length + " failed");
+        flash(parts.join(", ") + ".");
+        setTimeout(function () { location.reload(); }, 1500);
+      })
+      .catch(function (err) { flash("Generate request failed: " + err, true); })
+      .finally(function () { generateBtn.disabled = false; });
+  });
+
+  var sendBtn = document.getElementById("send-selected-btn");
+  sendBtn.addEventListener("click", function () {
+    var ids = Array.prototype.slice.call(document.querySelectorAll(".row-check:checked"))
+      .map(function (box) { return Number(box.value); });
+    if (!ids.length) { flash("Select at least one pitch to send.", true); return; }
+    sendBtn.disabled = true;
+    flash("Sending " + ids.length + " email(s)\u2026");
+    postJson("/api/outreach/send-selected", { ids: ids })
+      .then(function (result) {
+        if (!result.ok) {
+          flash(result.data.detail || "Send failed", true);
+          return;
+        }
+        var parts = ["Sent " + result.data.sent.length];
+        if (result.data.dry_run.length) parts.push("recorded (no mail provider) " + result.data.dry_run.length);
+        if (result.data.skipped.length) {
+          parts.push(result.data.skipped.length + " skipped: " +
+            result.data.skipped.map(function (s) { return s.id + " (" + s.reason + ")"; }).join(", "));
+        }
+        if (result.data.rate_limited) parts.push("stopped by hourly rate limit");
+        flash(parts.join(", ") + ".");
+        setTimeout(function () { location.reload(); }, 2000);
+      })
+      .catch(function (err) { flash("Send request failed: " + err, true); })
+      .finally(function () { sendBtn.disabled = false; });
+  });
+
+  var selectAll = document.getElementById("select-all");
+  selectAll.addEventListener("change", function () {
+    document.querySelectorAll(".row-check").forEach(function (box) { box.checked = selectAll.checked; });
+  });
+})();
+</script>
+{% endblock %}

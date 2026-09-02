@@ -1,0 +1,52 @@
+    <!-- ── Contact form ─────────────────────────────────────────────────── -->
+    <section id="contact" class="py-20 sm:py-24 bg-slate-50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center max-w-2xl mx-auto mb-14">
+          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-brand mb-3">Get in Touch</p>
+          <h2 class="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">{{ copy.contact_heading }}</h2>
+        </div>
+
+        <div class="grid gap-10 lg:grid-cols-5 items-start">
+          <div class="lg:col-span-2 space-y-6">
+            {% if business.phone %}
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Call or text</p>
+              <a href="tel:{{ business.phone | tel_href }}" class="text-xl font-bold text-slate-900 hover:text-brand transition-colors">{{ business.phone }}</a>
+            </div>
+            {% endif %}
+            {% if business.address %}
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Service area</p>
+              <p class="text-slate-700 font-medium leading-relaxed">{{ business.address }}</p>
+            </div>
+            {% endif %}
+            <div class="bg-brand-light rounded-2xl p-6">
+              <p class="text-sm text-slate-700 leading-relaxed">{{ copy.contact_subtext }}</p>
+            </div>
+          </div>
+
+          <form action="{{ form_action }}" method="POST" class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 p-8 shadow-sm space-y-5">
+            <input type="hidden" name="business_slug" value="{{ business.slug }}" />
+            <div>
+              <label for="lead-name" class="block text-sm font-medium text-slate-700 mb-1.5">Your name</label>
+              <input id="lead-name" type="text" name="name" required
+                     class="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" />
+            </div>
+            <div>
+              <label for="lead-phone" class="block text-sm font-medium text-slate-700 mb-1.5">Phone number</label>
+              <input id="lead-phone" type="tel" name="phone" required
+                     class="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand" />
+            </div>
+            <div>
+              <label for="lead-message" class="block text-sm font-medium text-slate-700 mb-1.5">How can we help?</label>
+              <textarea id="lead-message" name="message" rows="4"
+                        class="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-brand"></textarea>
+            </div>
+            <button type="submit"
+                    class="w-full inline-flex items-center justify-center bg-brand hover:bg-brand-dark text-white font-semibold px-6 py-3.5 rounded-xl shadow-sm transition-colors">
+              {{ copy.cta_text }}
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>

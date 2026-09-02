@@ -1,0 +1,22 @@
+# Secrets â€” never commit real credentials (R2 keys, LLM config)
+.env
+
+# Local application data
+*.db
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# OS cruft
+Thumbs.db
+.DS_Store
+
+# Internal docs — kept local only
+Business Plan.md
+Code Examples.md
+requirements.md

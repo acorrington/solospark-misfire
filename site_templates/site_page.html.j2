@@ -1,0 +1,66 @@
+{# Generic subpage for an expanded multi-page site (Phase 7).
+   Renders heading + paragraphs, and conditionally an items grid (services),
+   a gallery grid (photo placeholders with captions), and the lead form
+   (contact page). #}
+{% extends "site_base.html.j2" %}
+
+{% block page_title %}{{ heading }} — {{ business.name }}{% endblock %}
+{% block meta_description %}{{ paragraphs[0] if paragraphs else heading }}{% endblock %}
+
+{% block content %}
+
+  {# ── Page header + prose ──────────────────────────────────────────────── #}
+  <section class="max-w-4xl mx-auto px-4 pt-16 pb-8">
+    <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">{{ heading }}</h1>
+    {% if paragraphs %}
+    <div class="mt-6 space-y-4 text-slate-600 leading-relaxed text-lg">
+      {% for para in paragraphs %}
+      <p>{{ para }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  {# ── Items grid (services.html) ───────────────────────────────────────── #}
+  {% if items %}
+  <section class="max-w-6xl mx-auto px-4 py-8">
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {% for item in items %}
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+        <h3 class="font-bold text-lg text-slate-900">{{ item.title }}</h3>
+        {% if item.text %}
+        <p class="mt-2 text-slate-600 leading-relaxed">{{ item.text }}</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {# ── Gallery grid (gallery.html) — themed placeholders until photos exist #}
+  {% if captions %}
+  <section class="max-w-6xl mx-auto px-4 py-8">
+    <div class="grid gap-4 grid-cols-2 md:grid-cols-3">
+      {% for cap in captions %}
+      <figure class="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+        <div class="h-36 flex items-center justify-center"
+             style="background: linear-gradient(135deg, color-mix(in srgb, var(--sp-primary) 25%, #ffffff), color-mix(in srgb, var(--sp-secondary) 18%, #ffffff));">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-slate-400">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m6.75 7.5 3 2.25 3-2.25M6.75 15h9a2.25 2.25 0 0 0 2.25-2.25v-4.5A2.25 2.25 0 0 0 15.75 6h-11.25A2.25 2.25 0 0 0 2.25 8.25v9A2.25 2.25 0 0 0 4.5 19.5h15a2.25 2.25 0 0 0 2.25-2.25V15m-16.5-7.5 3 2.25" />
+          </svg>
+        </div>
+        <figcaption class="px-4 py-3 text-sm text-slate-600">{{ cap }}</figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {# ── Lead form (contact.html) ─────────────────────────────────────────── #}
+  {% if show_form %}
+  <section id="contact" class="max-w-3xl mx-auto px-4 py-8 pb-16">
+    {% include "site_lead_form.html.j2" %}
+  </section>
+  {% endif %}
+
+{% endblock %}

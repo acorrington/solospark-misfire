@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ business.name }}{% if business.category %} | {{ business.category }}{% endif %}{% if business.city %} — {{ business.city }}{% endif %}</title>
+  <meta name="description" content="{{ copy.tagline }} — {{ business.name }}{% if business.city %} in {{ business.city }}{% endif %}." />
+  {% if copy.logo_url %}<link rel="icon" type="image/png" href="{{ copy.logo_url }}" />{% endif %}
+  <meta property="og:title" content="{{ business.name }}" />
+  <meta property="og:description" content="{{ copy.tagline }}" />
+  {% if copy.hero_image_url %}<meta property="og:image" content="{{ copy.hero_image_url }}" />{% endif %}
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: "{{ copy.brand.primary }}",
+              dark: "{{ copy.brand.primary_dark }}",
+              light: "{{ copy.brand.primary_light }}"
+            },
+            ink: "{{ copy.brand.secondary }}"
+          },
+          fontFamily: {
+            sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"]
+          }
+        }
+      }
+    };
+  </script>
+</head>
+
+<body class="font-sans text-slate-800 antialiased bg-white">
+
+  <!-- ── Sticky header ─────────────────────────────────────────────────── -->
+  <header class="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <a href="#top" class="flex items-center gap-3 min-w-0">
+        {% if copy.logo_url %}
+        <img src="{{ copy.logo_url }}" alt="{{ business.name }} logo" class="h-9 w-auto max-w-[180px] object-contain shrink-0" />
+        {% endif %}
+        <span class="text-lg font-bold tracking-tight text-slate-900 truncate">{{ business.name }}</span>
+      </a>
+      <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
+        {% for label, anchor in nav_links %}
+        <a href="{{ anchor }}" class="hover:text-brand transition-colors">{{ label }}</a>
+        {% endfor %}
+      </nav>
+      {% if business.phone %}
+      <a href="tel:{{ business.phone | tel_href }}"
+         class="inline-flex items-center gap-2 bg-brand hover:bg-brand-dark text-white text-sm font-semibold px-4 py-2.5 rounded-full shadow-sm transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z"/></svg>
+        {{ business.phone }}
+      </a>
+      {% endif %}
+    </div>
+  </header>
+
+  <main id="top">
+    {% for section in layout %}
+    {% include "sections/" ~ section ~ ".html.j2" %}
+    {% endfor %}
+  </main>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+  <footer class="bg-slate-950 text-slate-400">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+      <div class="grid gap-10 sm:grid-cols-3">
+        <div>
+          {% if copy.logo_url %}
+          <img src="{{ copy.logo_url }}" alt="{{ business.name }} logo" class="h-8 w-auto max-w-[160px] object-contain mb-4 brightness-0 invert opacity-90" />
+          {% else %}
+          <p class="text-lg font-bold text-white">{{ business.name }}</p>
+          {% endif %}
+          <p class="text-sm leading-relaxed">{{ copy.tagline }}</p>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-4">Contact</p>
+          <ul class="space-y-2.5 text-sm">
+            {% if business.phone %}
+            <li><a href="tel:{{ business.phone | tel_href }}" class="hover:text-white transition-colors">{{ business.phone }}</a></li>
+            {% endif %}
+            {% if business.address %}<li>{{ business.address }}</li>{% endif %}
+          </ul>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-4">Service Area</p>
+          {% if business.city %}
+          <p class="text-sm leading-relaxed">{{ business.city }} and surrounding areas.</p>
+          {% elif business.category %}
+          <p class="text-sm leading-relaxed">{{ business.category }} services.</p>
+          {% endif %}
+        </div>
+      </div>
+      <div class="mt-12 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+        <p>&copy; {{ current_year }} {{ business.name }}. All rights reserved.</p>
+        <p>Preview by SoloSpark</p>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

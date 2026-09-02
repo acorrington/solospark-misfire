@@ -1,0 +1,31 @@
+    <!-- ── About / Why us ───────────────────────────────────────────────── -->
+    <section id="about" class="py-20 sm:py-24 bg-white">
+      {% set show_about_image = copy.about_images and 'gallery' not in layout %}
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="{% if show_about_image %}grid lg:grid-cols-2 gap-12 lg:gap-16 items-center{% else %}max-w-3xl mx-auto text-center{% endif %}">
+          <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-brand mb-3">Why Choose Us</p>
+            <h2 class="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">{{ copy.about_heading }}</h2>
+            {% for paragraph in copy.about_text | paragraphs %}
+            <p class="mt-5 leading-relaxed text-slate-600 {{ 'text-center' if not show_about_image else '' }}">{{ paragraph }}</p>
+            {% endfor %}
+            <ul class="{% if not show_about_image %}justify-center{% endif %} mt-8 flex flex-col gap-4">
+              {% for badge in copy.why_choose_us %}
+              <li class="flex items-center gap-3 text-slate-800 font-medium {{ 'justify-center' if not show_about_image else '' }}">
+                <span class="w-6 h-6 rounded-full bg-brand-light text-brand flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+                </span>
+                {{ badge }}
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% if show_about_image %}
+          <div class="relative">
+            <img src="{{ copy.about_images[0] }}" alt="{{ business.name }}" class="w-full aspect-[4/3] object-cover rounded-3xl shadow-xl" />
+            <div class="absolute -bottom-5 -left-5 hidden sm:block w-40 h-28 bg-brand rounded-2xl opacity-15 -z-10"></div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </section>

@@ -1,0 +1,22 @@
+    <!-- ── Services ─────────────────────────────────────────────────────── -->
+    <section id="services" class="py-20 sm:py-24 bg-slate-50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center max-w-2xl mx-auto mb-14">
+          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-brand mb-3">Our Services</p>
+          <h2 class="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">{{ copy.services_heading }}</h2>
+          <p class="mt-4 text-slate-600">{{ copy.services_intro }}</p>
+        </div>
+
+        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {% for service in copy.services %}
+          <div class="group bg-white rounded-2xl border border-slate-200 p-8 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+            <div class="w-12 h-12 rounded-xl bg-brand-light text-brand flex items-center justify-center">
+              {{ service.icon_svg | safe }}
+            </div>
+            <h3 class="mt-5 text-lg font-semibold text-slate-900">{{ service.title }}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-slate-600">{{ service.description }}</p>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>

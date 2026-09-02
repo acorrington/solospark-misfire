@@ -1,0 +1,16 @@
+    <!-- ── Gallery ──────────────────────────────────────────────────────── -->
+    <section id="gallery" class="py-20 sm:py-24 bg-white">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center max-w-2xl mx-auto mb-14">
+          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-brand mb-3">Photos</p>
+          <h2 class="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">A Closer Look</h2>
+        </div>
+
+        {% set images = copy.gallery_images or copy.about_images %}
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
+          {% for image in images[:6] %}
+          <img src="{{ image }}" alt="{{ business.name }}" class="w-full aspect-[4/3] object-cover rounded-2xl shadow-sm" />
+          {% endfor %}
+        </div>
+      </div>
+    </section>

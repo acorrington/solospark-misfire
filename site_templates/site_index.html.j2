@@ -1,0 +1,68 @@
+{# Homepage of an expanded multi-page site (Phase 7).
+   Same sections as the Phase 4 landing page, but theme-aware and linked
+   into the shared navigation via site_base. #}
+{% extends "site_base.html.j2" %}
+
+{% block page_title %}{{ business.name }} — {{ copy.tagline or 'Home' }}{% endblock %}
+{% block meta_description %}{{ copy.hero_subheadline }}{% endblock %}
+
+{% block content %}
+
+  {# ── Hero ─────────────────────────────────────────────────────────────── #}
+  <section id="top" class="sp-hero-bg">
+    <div class="max-w-4xl mx-auto px-4 py-20 md:py-28 text-center space-y-6">
+      {% if copy.tagline %}
+      <p class="text-sm font-semibold uppercase tracking-widest sp-tint inline-block rounded-full px-4 py-1">{{ copy.tagline }}</p>
+      {% endif %}
+      <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 leading-tight">{{ copy.hero_headline }}</h1>
+      {% if copy.hero_subheadline %}
+      <p class="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">{{ copy.hero_subheadline }}</p>
+      {% endif %}
+      <a href="#contact" class="sp-btn inline-block rounded-xl text-white font-semibold px-8 py-4 text-lg shadow-sm">{{ copy.cta_text }}</a>
+    </div>
+  </section>
+
+  {# ── Services ─────────────────────────────────────────────────────────── #}
+  {% if copy.services %}
+  <section class="max-w-6xl mx-auto px-4 py-16">
+    <h2 class="text-3xl font-bold tracking-tight text-slate-900 text-center mb-10">What We Do</h2>
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {% for svc in copy.services %}
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center sp-tint mb-4">{{ svc.icon_svg | safe }}</div>
+        <h3 class="font-bold text-lg text-slate-900">{{ svc.title }}</h3>
+        {% if svc.description %}
+        <p class="mt-2 text-slate-600 leading-relaxed">{{ svc.description }}</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {# ── About + trust badges ─────────────────────────────────────────────── #}
+  <section class="bg-white border-y border-slate-200">
+    <div class="max-w-4xl mx-auto px-4 py-16 text-center space-y-6">
+      {% if copy.about_heading %}
+      <h2 class="text-3xl font-bold tracking-tight text-slate-900">{{ copy.about_heading }}</h2>
+      {% endif %}
+      {% for para in copy.about_text | paragraphs %}
+      <p class="text-slate-600 leading-relaxed text-lg">{{ para }}</p>
+      {% endfor %}
+      {% if copy.why_choose_us %}
+      <div class="flex flex-wrap justify-center gap-3 pt-4">
+        {% for badge in copy.why_choose_us %}
+        <span class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium sp-tint">{{ badge }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+  {# ── Lead form ────────────────────────────────────────────────────────── #}
+  <section id="contact" class="max-w-3xl mx-auto px-4 py-16">
+    <h2 class="text-3xl font-bold tracking-tight text-slate-900 text-center mb-8">Get In Touch</h2>
+    {% include "site_lead_form.html.j2" %}
+  </section>
+
+{% endblock %}

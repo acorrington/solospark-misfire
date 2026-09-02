@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}SoloSpark — Lead Pipeline{% endblock %}
+{% set stage_colors = {
+  "discovered": "bg-slate-200 text-slate-700",
+  "audited": "bg-blue-100 text-blue-700",
+  "mockup_ready": "bg-indigo-100 text-indigo-700",
+  "pitch_approved": "bg-purple-100 text-purple-700",
+  "contacted": "bg-amber-100 text-amber-800",
+  "replied": "bg-teal-100 text-teal-700",
+  "won": "bg-green-100 text-green-700",
+  "lost": "bg-red-100 text-red-700"
+} %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Lead Pipeline</h1>
+
+<form method="get" action="/" class="flex flex-wrap items-end gap-3 mb-6 bg-white rounded-lg shadow p-4">
+  <label class="text-sm">
+    <span class="block text-slate-500 mb-1">Stage</span>
+    <select name="stage" class="border rounded px-2 py-1.5 text-sm min-w-[160px]">
+      <option value="">All stages</option>
+      {% for s in stages %}
+      <option value="{{ s }}" {% if s == stage_filter %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="text-sm">
+    <span class="block text-slate-500 mb-1">Audit flag</span>
+    <select name="flag" class="border rounded px-2 py-1.5 text-sm min-w-[200px]">
+      <option value="">All flags</option>
+      {% for f in flags %}
+      <option value="{{ f }}" {% if f == flag_filter %}selected{% endif %}>{{ f }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="text-sm">
+    <span class="block text-slate-500 mb-1">Min rating</span>
+    <input type="number" step="0.1" min="0" max="5" name="min_rating"
+           value="{{ min_rating_filter }}" class="border rounded px-2 py-1.5 text-sm w-24">
+  </label>
+  <button type="submit" class="bg-slate-900 text-white text-sm font-medium px-4 py-2 rounded hover:bg-slate-700 transition">Filter</button>
+  {% if stage_filter or flag_filter or min_rating_filter != "" %}
+  <a href="/" class="text-sm text-slate-500 underline self-center">Clear</a>
+  {% endif %}
+</form>
+
+<div class="flex flex-wrap items-center gap-3 mb-4">
+  <button type="button" id="audit-btn"
+          class="bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-blue-500 transition">Audit pending</button>
+  <button type="button" id="deploy-all-btn"
+          class="bg-emerald-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-emerald-500 transition">Deploy all ready</button>
+  <span id="pipeline-status" class="text-sm text-slate-500"></span>
+</div>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-50 text-left text-slate-500 uppercase text-xs tracking-wide">
+      <tr>
+        <th class="px-4 py-3">Business</th>
+        <th class="px-4 py-3">Stage</th>
+        <th class="px-4 py-3">Rating</th>
+        <th class="px-4 py-3">Audit flags</th>
+        <th class="px-4 py-3">Website</th>
+        <th class="px-4 py-3 text-right">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for b in businesses %}
+      <tr class="hover:bg-slate-50">
+        <td class="px-4 py-3">
+          <div class="font-medium">{{ b.name }}</div>
+          <div class="text-xs text-slate-400">{{ b.category or "—" }}{% if b.address %} · {{ b.address }}{% endif %}</div>
+        </td>
+        <td class="px-4 py-3">
+          <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium {{ stage_colors.get(b.stage.value, 'bg-slate-200 text-slate-700') }}">
+            {{ b.stage.value }}
+          </span>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          {% if b.rating %}
+          <span title="{{ b.review_count or 0 }} reviews">&#9733; {{ "%.1f"|format(b.rating) }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-3">
+          {% for f in b.audit_flags_list() %}
+          <span class="inline-block bg-red-50 text-red-700 border border-red-100 rounded px-1.5 py-0.5 text-xs mr-1 mb-1">{{ f }}</span>
+          {% else %}
+          <span class="text-slate-400 text-xs">none</span>
+          {% endfor %}
+        </td>
+        <td class="px-4 py-3">
+          {% if b.current_website %}
+          <a href="{{ b.current_website }}" target="_blank" rel="noopener" class="text-blue-600 hover:underline">{{ b.current_website | replace("https://", "") | replace("http://", "") }}</a>
+          {% elif b.no_website %}
+          <span class="text-red-600 font-medium text-xs">No website</span>
+          {% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-3 text-right whitespace-nowrap">
+          <a href="/review/{{ b.id }}" class="text-blue-600 hover:underline mr-3">Review</a>
+          {% if b.generated_copy %}
+          <button type="button" data-deploy="{{ b.id }}" class="deploy-btn bg-emerald-600 text-white text-xs font-medium px-3 py-1.5 rounded hover:bg-emerald-500 transition mr-3">Deploy</button>
+          {% endif %}
+          <button type="button" data-generate="{{ b.id }}" data-name="{{ b.name }}"
+                  class="generate-btn bg-indigo-600 text-white text-xs font-medium px-3 py-1.5 rounded hover:bg-indigo-500 transition">{% if b.preview_url %}Regenerate{% else %}Generate{% endif %}</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No businesses match the current filters.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+(function () {
+  var status = document.getElementById("pipeline-status");
+
+  function flash(message, isError) {
+    status.textContent = message;
+    status.className = "text-sm " + (isError ? "text-red-600" : "text-slate-500");
+  }
+
+  function postJson(url, body) {
+    var init = { method: "POST" };
+    if (body !== undefined) {
+      init.headers = { "Content-Type": "application/json" };
+      init.body = JSON.stringify(body);
+    }
+    return fetch(url, init).then(function (response) {
+      return response.json().then(function (data) {
+        return { ok: response.ok, data: data };
+      });
+    });
+  }
+
+  var auditBtn = document.getElementById("audit-btn");
+  auditBtn.addEventListener("click", function () {
+    auditBtn.disabled = true;
+    flash("Auditing\u2026");
+    postJson("/api/audit")
+      .then(function (result) {
+        if (!result.ok) {
+          flash(result.data.detail || "Audit failed", true);
+          return;
+        }
+        var bad = result.data.audited.filter(function (a) { return a.is_bad_site; }).length;
+        flash("Audited " + result.data.count + " lead(s) \u2014 " + bad + " flagged as bad site(s).");
+        setTimeout(function () { location.reload(); }, 1500);
+      })
+      .catch(function (err) { flash("Audit request failed: " + err, true); })
+      .finally(function () { auditBtn.disabled = false; });
+  });
+
+  var deployAllBtn = document.getElementById("deploy-all-btn");
+  deployAllBtn.addEventListener("click", function () {
+    deployAllBtn.disabled = true;
+    flash("Deploying\u2026");
+    postJson("/api/deploy", {})
+      .then(function (result) {
+        if (!result.ok) {
+          flash(result.data.detail || "Deploy failed", true);
+          return;
+        }
+        flash("Deployed " + result.data.deployed + " preview(s).");
+        setTimeout(function () { location.reload(); }, 1500);
+      })
+      .catch(function (err) { flash("Deploy request failed: " + err, true); })
+      .finally(function () { deployAllBtn.disabled = false; });
+  });
+
+  document.querySelectorAll(".deploy-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = btn.getAttribute("data-deploy");
+      btn.disabled = true;
+      postJson("/api/deploy/" + id)
+        .then(function (result) {
+          if (!result.ok) {
+            flash(result.data.detail || "Deploy failed", true);
+            btn.disabled = false;
+            return;
+          }
+          var link = document.createElement("a");
+          link.href = result.data.preview_url;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.className = "text-emerald-700 text-xs font-medium hover:underline mr-3";
+          link.textContent = "View preview";
+          btn.replaceWith(link);
+        })
+        .catch(function (err) {
+          flash("Deploy request failed: " + err, true);
+          btn.disabled = false;
+        });
+    });
+  });
+
+  document.querySelectorAll(".generate-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = btn.getAttribute("data-generate");
+      var name = btn.getAttribute("data-name") || "this lead";
+      btn.disabled = true;
+      flash("Generating mockup for " + name + "\u2026 (local LLM \u2014 can take a minute)");
+      fetch("/generate/" + id, { method: "POST" })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            return { ok: response.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok) {
+            flash(result.data.detail || "Generation failed", true);
+            btn.disabled = false;
+            return;
+          }
+          location.href = "/review/" + id;
+        })
+        .catch(function (err) {
+          flash("Generate request failed: " + err, true);
+          btn.disabled = false;
+        });
+    });
+  });
+})();
+</script>
+{% endblock %}

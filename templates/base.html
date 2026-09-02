@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SoloSpark{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-900 antialiased">
+  <header class="bg-slate-900 text-white shadow">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/" class="text-lg font-bold tracking-tight">&#9889; SoloSpark</a>
+      <nav class="text-sm text-slate-300">
+        <a href="/" class="hover:text-white transition">Lead Pipeline</a>
+        <a href="/pipeline" class="ml-4 hover:text-white transition">Pipeline</a>
+        <a href="/discover" class="ml-4 hover:text-white transition">Discover</a>
+        <a href="/outreach" class="ml-4 hover:text-white transition">Outreach</a>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

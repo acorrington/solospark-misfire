@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block title %}SoloSpark — {{ business.name }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <div>
+    <a href="/" class="text-sm text-slate-500 hover:text-slate-700">&larr; Pipeline</a>
+    <h1 class="text-2xl font-bold">{{ business.name }}</h1>
+  </div>
+  <div class="flex flex-col items-end gap-2">
+    {% if not business.preview_url %}
+    <button type="button" class="generate-btn bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-indigo-500 transition">Generate mockup</button>
+    {% else %}
+    <form id="site-prompt-form" class="flex items-center gap-2">
+      <input type="text" name="prompt" placeholder="Fine-tune instructions (e.g. 'shorten the hero headline')"
+             class="w-64 border rounded px-2 py-1.5 text-sm">
+      <label class="flex items-center gap-1 whitespace-nowrap text-xs text-slate-600">
+        <input type="checkbox" id="refine-only">
+        Update current site only (no re-scrape)
+      </label>
+      <button type="submit" id="site-prompt-btn" class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded hover:bg-indigo-500 transition shrink-0">Apply</button>
+    </form>
+    <p class="text-xs text-slate-400 max-w-md text-right leading-snug">Tip: put exact new text in quotes — e.g. change the CTA button to "Book Now" — and it is applied verbatim.</p>
+    <div class="flex items-center gap-3">
+      <button type="button" id="regenerate-btn" class="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-indigo-500 transition">Regenerate site</button>
+      <button type="button" id="delete-site-btn" class="bg-red-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-red-500 transition">Delete site</button>
+    </div>
+    {% endif %}
+    {% if business.generated_copy and not business.preview_url %}
+    <button type="button" id="deploy-preview-btn" class="bg-emerald-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-emerald-500 transition">Deploy preview</button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+  <!-- ── Left pane: info, audit, pitch form, payment link ─────────────────── -->
+  <div class="space-y-4">
+    <section class="bg-white rounded-lg shadow p-4">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Contact info</h2>
+      <dl class="text-sm space-y-1.5">
+        <div><dt class="inline text-slate-400">Phone: </dt><dd class="inline">{{ business.phone or "—" }}</dd></div>
+        <div><dt class="inline text-slate-400">Email: </dt><dd class="inline">{{ business.contact_email or "—" }}</dd></div>
+        <div><dt class="inline text-slate-400">Website: </dt>
+          {% if business.current_website %}<dd class="inline"><a href="{{ business.current_website }}" target="_blank" rel="noopener" class="text-blue-600 hover:underline">{{ business.current_website }}</a></dd>{% else %}<dd class="inline text-red-600">No website</dd>{% endif %}
+        </div>
+        <div><dt class="inline text-slate-400">Address: </dt><dd class="inline">{{ business.address or "—" }}</dd></div>
+        {% if business.rating %}
+        <div><dt class="inline text-slate-400">Rating: </dt><dd class="inline">&#9733; {{ "%.1f"|format(business.rating) }} ({{ business.review_count or 0 }} reviews)</dd></div>
+        {% endif %}
+      </dl>
+    </section>
+
+    <section class="bg-white rounded-lg shadow p-4">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Audit breakdown</h2>
+      {% if flags %}
+      <ul class="space-y-1.5">
+        {% for f in flags %}
+        <li class="flex items-center gap-2 text-sm">
+          <span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>{{ f }}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-sm text-slate-400">No issues found.</p>
+      {% endif %}
+    </section>
+
+    <section class="bg-white rounded-lg shadow p-4">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Outreach pitch</h2>
+      <form method="post" action="/outreach/send/{{ business.id }}" class="space-y-3">
+        <label class="block text-sm">
+          <span class="text-slate-500">Subject</span>
+          <input type="text" name="subject" value="{{ pitch_subject }}" required
+                 class="mt-1 w-full border rounded px-2 py-1.5 text-sm">
+        </label>
+        <label class="block text-sm">
+          <span class="text-slate-500">Body</span>
+          <textarea name="body" rows="8" required
+                    class="mt-1 w-full border rounded px-2 py-1.5 text-sm font-mono">{{ pitch_body }}</textarea>
+        </label>
+        {% if business.contact_email %}
+        <button type="submit" class="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-green-500 transition">Send email</button>
+        {% else %}
+        <p class="text-xs text-red-600">No contact email on file — outreach is disabled.</p>
+        {% endif %}
+      </form>
+
+      <hr class="my-4 border-slate-100">
+      <form id="prompt-regen-form" method="post" action="/regenerate-prompt/{{ business.id }}" class="flex gap-2">
+        <input type="text" name="prompt" placeholder="Instructions (e.g. 'make the hero headline shorter and mention 24/7 service')"
+               class="flex-1 border rounded px-2 py-1.5 text-sm">
+        <button type="submit" id="prompt-regen-btn" class="bg-slate-900 text-white text-sm font-medium px-3 py-1.5 rounded hover:bg-slate-700 transition shrink-0">Regenerate</button>
+      </form>
+      <p class="mt-2 text-xs text-slate-400 leading-snug">Tip: put exact new text in quotes — e.g. change the CTA button to "Book Now" — and it is applied verbatim.</p>
+    </section>
+
+    <section class="bg-white rounded-lg shadow p-4">
+      <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Payment link</h2>
+      {% if payment_link %}
+      <a href="{{ payment_link }}" target="_blank" rel="noopener"
+         class="inline-block bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-blue-500 transition">Open Stripe checkout</a>
+      {% else %}
+      <p class="text-xs text-slate-400">Stripe is not configured (set STRIPE_SECRET_KEY to enable payment links).</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- ── Right pane: live preview iframe ──────────────────────────────────── -->
+  <div class="bg-white rounded-lg shadow p-4">
+    <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Live preview</h2>
+    {% if business.preview_url %}
+    <iframe src="{{ business.preview_url }}" title="Site preview for {{ business.name }}"
+            class="w-full h-[70vh] rounded-lg border border-slate-200 bg-white"></iframe>
+    <p class="text-xs text-slate-400 mt-2">{{ business.preview_url }}</p>
+    <p id="regen-status" class="text-xs text-slate-500 mt-1 hidden"></p>
+    {% else %}
+    <div class="h-[70vh] flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-slate-400">
+      <p id="preview-placeholder" class="text-sm mb-3">No preview yet.</p>
+      <button type="button" class="generate-btn bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-indigo-500 transition">Generate mockup</button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if business.generated_copy and not business.preview_url %}
+<script>
+document.getElementById("deploy-preview-btn").addEventListener("click", function () {
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = "Deploying\u2026";
+  fetch("/api/deploy/{{ business.id }}", { method: "POST" })
+    .then(function (response) {
+      return response.json().then(function (data) {
+        return { ok: response.ok, data: data };
+      });
+    })
+    .then(function (result) {
+      if (!result.ok) { btn.textContent = result.data.detail || "Deploy failed"; return; }
+      location.reload();
+    })
+    .catch(function (err) { btn.textContent = "Request failed: " + err; });
+});
+</script>
+{% endif %}
+
+{% if not business.preview_url %}
+<script>
+(function () {
+  var placeholder = document.getElementById("preview-placeholder");
+  document.querySelectorAll(".generate-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      btn.textContent = "Generating\u2026";
+      if (placeholder) {
+        placeholder.textContent = "Generating your mockup\u2026 the local LLM can take a minute.";
+      }
+      fetch("/generate/{{ business.id }}", { method: "POST" })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            return { ok: response.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok) {
+            btn.textContent = "Generation failed";
+            if (placeholder) { placeholder.textContent = result.data.detail || "Generation failed."; }
+            return;
+          }
+          location.reload();
+        })
+        .catch(function (err) {
+          btn.textContent = "Generation failed";
+          if (placeholder) { placeholder.textContent = "Request failed: " + err; }
+        });
+    });
+  });
+})();
+</script>
+{% endif %}
+
+{% if business.preview_url %}
+<script>
+(function () {
+  var statusEl = document.getElementById("regen-status");
+  function setStatus(msg) {
+    if (!statusEl) return;
+    statusEl.textContent = msg;
+    statusEl.classList.remove("hidden");
+  }
+  function fail(btn, label, err) {
+    btn.disabled = false;
+    btn.textContent = label;
+    setStatus(err);
+  }
+
+  var btn = document.getElementById("regenerate-btn");
+  if (btn) {
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      btn.textContent = "Regenerating\u2026";
+      setStatus("Rebuilding from their current website\u2026 the local LLM can take a minute.");
+      fetch("/generate/{{ business.id }}", { method: "POST" })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            return { ok: response.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok) { fail(btn, "Regenerate site", "Regeneration failed: " + (result.data.detail || "unknown error")); return; }
+          location.reload();
+        })
+        .catch(function (err) { fail(btn, "Regenerate site", "Request failed: " + err); });
+    });
+  }
+
+  var siteForm = document.getElementById("site-prompt-form");
+  if (siteForm) {
+    siteForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var submitBtn = document.getElementById("site-prompt-btn");
+      var prompt = (siteForm.elements["prompt"].value || "").trim();
+      var refineOnlyEl = document.getElementById("refine-only");
+      var refineOnly = !!(refineOnlyEl && refineOnlyEl.checked);
+      if (refineOnly && !prompt) {
+        setStatus("Type your instructions first — fine-tuning needs a prompt.");
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Working\u2026";
+      var endpoint, label, statusMsg;
+      if (refineOnly) {
+        endpoint = "/refine/{{ business.id }}";
+        label = "Updating current site from your instructions\u2026 no re-scrape. This can take a minute.";
+        statusMsg = "Fine-tuning failed: ";
+      } else {
+        endpoint = "/regenerate-prompt/{{ business.id }}";
+        label = prompt
+          ? "Applying your prompt adjustment (full regeneration)\u2026 this can take a minute."
+          : "Regenerating\u2026 this can take a minute.";
+        statusMsg = "Regeneration failed: ";
+      }
+      setStatus(label);
+      fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: prompt })
+      })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            return { ok: response.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok) { fail(submitBtn, "Apply", statusMsg + (result.data.detail || "unknown error")); return; }
+          location.reload();
+        })
+        .catch(function (err) { fail(submitBtn, "Apply", "Request failed: " + err); });
+    });
+  }
+
+  var deleteBtn = document.getElementById("delete-site-btn");
+  if (deleteBtn) {
+    deleteBtn.addEventListener("click", function () {
+      if (!confirm("Delete the deployed site for {{ business.name }}?\nThis removes it from the live preview bucket and clears the generated copy. You can always generate a fresh one.")) return;
+      deleteBtn.disabled = true;
+      deleteBtn.textContent = "Deleting\u2026";
+      setStatus("Removing the site from the preview bucket\u2026");
+      fetch("/site/{{ business.id }}", { method: "DELETE" })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            return { ok: response.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok) { fail(deleteBtn, "Delete site", "Delete failed: " + (result.data.detail || "unknown error")); return; }
+          location.reload();
+        })
+        .catch(function (err) { fail(deleteBtn, "Delete site", "Request failed: " + err); });
+    });
+  }
+})();
+</script>
+{% endif %}
+
+<script>
+(function () {
+  var statusEl = document.getElementById("regen-status");
+  function setStatus(msg) {
+    if (!statusEl) return;
+    statusEl.textContent = msg;
+    statusEl.classList.remove("hidden");
+  }
+  var form = document.getElementById("prompt-regen-form");
+  if (form) {
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var submitBtn = document.getElementById("prompt-regen-btn");
+      var prompt = (form.elements["prompt"].value || "").trim();
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Working\u2026";
+      setStatus(prompt
+        ? "Applying your instructions (full regeneration)\u2026 this can take a minute."
+        : "Regenerating\u2026 this can take a minute.");
+      fetch("/regenerate-prompt/{{ business.id }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: prompt })
+      })
+        .then(function (response) {
+          return response.json().then(function (data) {
+            return { ok: response.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok) { submitBtn.disabled = false; submitBtn.textContent = "Regenerate"; setStatus("Regeneration failed: " + (result.data.detail || "unknown error")); return; }
+          location.reload();
+        })
+        .catch(function (err) { submitBtn.disabled = false; submitBtn.textContent = "Regenerate"; setStatus("Request failed: " + err); });
+    });
+  }
+})();
+</script>
+{% endblock %}

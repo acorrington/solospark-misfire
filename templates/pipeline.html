@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}SoloSpark — Pipeline{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Run the Full Pipeline</h1>
+
+<p class="text-sm text-slate-500 mb-6">
+  One click: discover new leads from Google Places, audit their websites, generate
+  landing-page copy for every no-website / bad-site lead, optionally deploy previews
+  to R2, and queue outreach pitches for approval. Per-lead failures are reported —
+  they never abort the run.
+</p>
+
+<form id="pipeline-form" class="flex flex-wrap items-end gap-3 mb-6 bg-white rounded-lg shadow p-4">
+  <label class="text-sm grow">
+    <span class="block text-slate-500 mb-1">Search query</span>
+    <input type="text" name="query" required placeholder="e.g. plumbers in Eugene OR"
+           class="border rounded px-2 py-1.5 text-sm w-full min-w-[280px]">
+  </label>
+  <label class="text-sm">
+    <span class="block text-slate-500 mb-1">Max results</span>
+    <input type="number" name="limit" min="1" max="100" placeholder="All"
+           class="border rounded px-2 py-1.5 text-sm w-24">
+  </label>
+  <label class="flex items-center gap-2 text-sm mb-2">
+    <input type="checkbox" name="auto_deploy" class="rounded border-slate-300">
+    <span class="text-slate-600">Auto-deploy previews to R2</span>
+  </label>
+  <button type="submit" id="pipeline-btn"
+          class="bg-slate-900 text-white text-sm font-medium px-4 py-2 rounded hover:bg-slate-700 transition">Run pipeline</button>
+</form>
+
+<div id="pipeline-error" class="hidden mb-6 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-4"></div>
+
+<div id="pipeline-results" class="hidden space-y-4">
+  <p id="pipeline-summary" class="text-sm font-medium mb-3"></p>
+  <div id="stage-cards" class="grid gap-4 md:grid-cols-2"></div>
+</div>
+
+<div class="mt-8 bg-white rounded-lg shadow p-4">
+  <h2 class="text-sm font-semibold text-slate-700 mb-3">Prefer to run stages individually?</h2>
+  <ul class="text-sm text-slate-600 space-y-1.5 list-disc pl-5">
+    <li><a href="/discover" class="text-blue-600 hover:underline">Discover</a> — search Google Places and add new leads.</li>
+    <li><a href="/" class="text-blue-600 hover:underline">Lead Pipeline</a> — audit pending sites, generate copy per lead, and bulk-deploy previews.</li>
+    <li><a href="/outreach" class="text-blue-600 hover:underline">Outreach Queue</a> — draft, review, approve and send pitch emails.</li>
+  </ul>
+</div>
+
+<script>
+(function () {
+  var form = document.getElementById("pipeline-form");
+  var errorBox = document.getElementById("pipeline-error");
+  var resultsBox = document.getElementById("pipeline-results");
+  var summary = document.getElementById("pipeline-summary");
+  var cards = document.getElementById("stage-cards");
+  var btn = document.getElementById("pipeline-btn");
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
+
+  function card(title, bodyHtml, tone) {
+    var border = tone === "warn" ? "border-amber-200 bg-amber-50" : "bg-white";
+    return '<div class="rounded-lg shadow p-4 ' + border + '">' +
+      '<h3 class="text-sm font-semibold text-slate-700 mb-2">' + title + "</h3>" +
+      '<div class="text-sm text-slate-600">' + bodyHtml + "</div></div>";
+  }
+
+  function failList(items, label) {
+    if (!items.length) return "";
+    var lines = items.map(function (item) {
+      return "<li>" + escapeHtml(item.slug) + " — " + escapeHtml(label + ": " + item.error) + "</li>";
+    });
+    return '<ul class="list-disc pl-5 mt-2 space-y-1 text-xs text-red-700">' + lines.join("") + "</ul>";
+  }
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    var payload = {
+      query: form.querySelector("[name=query]").value.trim(),
+      auto_deploy: form.querySelector("[name=auto_deploy]").checked
+    };
+    var limitRaw = form.querySelector("[name=limit]").value;
+    if (limitRaw) payload.limit = parseInt(limitRaw, 10);
+
+    btn.disabled = true;
+    btn.textContent = "Running pipeline\u2026";
+    errorBox.classList.add("hidden");
+    resultsBox.classList.add("hidden");
+
+    fetch("/api/pipeline/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(function (response) {
+        return response.json().then(function (data) {
+          return { ok: response.ok, data: data };
+        });
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          errorBox.textContent = result.data.detail || "Pipeline run failed";
+          errorBox.classList.remove("hidden");
+          return;
+        }
+        var d = result.data;
+
+        summary.textContent = "Done — " + d.found + " place(s) found, " +
+          d.new_leads.length + " new lead(s), " + d.audited + " audited, " +
+          d.generated.length + " generated" + (d.copy_failed.length ? ", " +
+          d.copy_failed.length + " copy failure(s)" : "") + ".";
+
+        var html = "";
+
+        // 1. Discover
+        var leadsHtml;
+        if (d.new_leads.length) {
+          leadsHtml = "<ul class='list-disc pl-5 space-y-1'>" + d.new_leads.map(function (lead) {
+            return "<li>" + escapeHtml(lead.name) + " <span class='text-xs text-slate-400'>[" +
+              escapeHtml(lead.slug) + "]</span> — " + escapeHtml(lead.site) +
+              ' <a href="/review/' + lead.id + '" class="text-blue-600 hover:underline">Review</a></li>';
+          }).join("") + "</ul>";
+        } else {
+          leadsHtml = "<p class='text-slate-400'>No new leads — every place found is already in the ledger.</p>";
+        }
+        html += card("1 · Discover", "<p>" + d.found + " found, " + d.new_leads.length + " new.</p>" + leadsHtml);
+
+        // 2. Audit
+        html += card("2 · Audit", "<p>" + d.audited + " pending website(s) audited.</p>");
+
+        // 3. Copy
+        var copyHtml = "<p>" + d.generated.length + " landing page(s) generated.</p>";
+        if (d.generated.length) {
+          copyHtml += "<ul class='list-disc pl-5 mt-1'>" + d.generated.map(function (slug) {
+            return "<li>" + escapeHtml(slug) + "</li>";
+          }).join("") + "</ul>";
+        }
+        copyHtml += failList(d.copy_failed, "copy failed");
+        html += card("3 · Generate copy", copyHtml, d.copy_failed.length ? "warn" : "ok");
+
+        // 4. Deploy
+        var deployHtml;
+        if (d.deployed.length) {
+          deployHtml = "<ul class='list-disc pl-5 space-y-1'>" + d.deployed.map(function (item) {
+            return "<li>" + escapeHtml(item.slug) + " — <a href='" + escapeHtml(item.url) +
+              "' target='_blank' rel='noopener' class='text-blue-600 hover:underline'>preview</a></li>";
+          }).join("") + "</ul>";
+        } else {
+          deployHtml = "<p class='text-slate-400'>" + (d.deploy_failed.length
+            ? "No previews deployed." : "Auto-deploy was off — deploy from the Lead Pipeline page when ready.") + "</p>";
+        }
+        deployHtml += failList(d.deploy_failed, "deploy failed");
+        html += card("4 · Deploy", "<p>" + d.deployed.length + " preview(s) deployed.</p>" + deployHtml,
+          d.deploy_failed.length ? "warn" : "ok");
+
+        // 5. Outreach
+        var outreachHtml;
+        if (d.outreach_queued > 0) {
+          outreachHtml = "<p>" + d.outreach_queued + " pitch(es) queued for approval.</p>" +
+            '<p class="mt-2"><a href="/outreach" class="text-blue-600 hover:underline font-medium">Review &amp; send in the Outreach queue →</a></p>';
+        } else {
+          outreachHtml = "<p class='text-slate-400'>No pitches queued — leads need a deployed preview and a contact email. " +
+            (d.outreach_skipped.length ? d.outreach_skipped.length + " skipped." : "") + "</p>";
+        }
+        html += card("5 · Outreach", outreachHtml);
+
+        cards.innerHTML = html;
+        resultsBox.classList.remove("hidden");
+      })
+      .catch(function (err) {
+        errorBox.textContent = "Request failed: " + err;
+        errorBox.classList.remove("hidden");
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = "Run pipeline";
+      });
+  });
+})();
+</script>
+{% endblock %}

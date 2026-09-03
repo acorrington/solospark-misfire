@@ -7,7 +7,9 @@ live LLM, R2, or outreach service is required.
 from __future__ import annotations
 
 import json
+import re
 
+import pytest
 from fastapi.testclient import TestClient
 
 import app.pipeline as pipeline
@@ -137,6 +139,18 @@ def get_business(business_id):
         return db.get(models.Business, business_id)
 
 
+@pytest.fixture(autouse=True)
+def _stock_images_off_by_default(monkeypatch):
+    """Openverse lookups are live network calls — unit tests stay offline by
+    default. Tests that exercise the stock-image fallback re-patch this
+    explicitly (a later setattr on the same monkeypatcher wins)."""
+    import app.main as main_mod
+
+    monkeypatch.setattr(
+        main_mod, "search_stock_images", lambda query, count=5, session=None: []
+    )
+
+
 # ── GET / — pipeline table ───────────────────────────────────────────────────
 
 
@@ -178,6 +192,20 @@ def test_dashboard_flag_and_rating_filters(tmp_path):
     assert r.status_code == 200
     assert "Acme Plumbing" in r.text
     assert "Beta HVAC" not in r.text
+
+
+def test_dashboard_shows_email_or_missing_flag(tmp_path):
+    client, _ = make_test_client(tmp_path)
+    seed_business(contact_email="owner@acme.com")
+    seed_business(name="No Email Co", slug="no-email-co", contact_email=None)
+
+    r = client.get("/")
+    assert r.status_code == 200
+    # the known email renders under the address…
+    assert "owner@acme.com" in r.text
+    # …and a business without one is flagged in red
+    assert "Missing Email" in r.text
+    assert 'text-red-600' in r.text
 
 
 # ── GET /review/{business_id} — split-screen studio ─────────────────────────
@@ -1386,10 +1414,10 @@ def test_review_page_with_preview_shows_refine_checkbox_and_delete_button(tmp_pa
 
     r = client.get(f"/review/{bid}")
     assert r.status_code == 200
-    # website-generation prompt form lives in the header, above the site buttons
+    # website-generation prompt form lives in the header, below the site buttons
     assert 'id="site-prompt-form"' in r.text
-    assert r.text.index('id="site-prompt-form"') < r.text.index('id="regenerate-btn"')
-    assert r.text.index('id="site-prompt-form"') < r.text.index('id="delete-site-btn"')
+    assert r.text.index('id="regenerate-btn"') < r.text.index('id="site-prompt-form"')
+    assert r.text.index('id="delete-site-btn"') < r.text.index('id="site-prompt-form"')
     assert 'id="refine-only"' in r.text
     assert "Update current site only (no re-scrape)" in r.text
     assert 'id="delete-site-btn"' in r.text
@@ -1414,6 +1442,40 @@ def test_review_page_without_copy_has_no_refine_checkbox_or_delete(tmp_path):
     # the original prompt form is unchanged in the outreach card
     assert 'id="prompt-regen-form"' in r.text
     assert ">Regenerate<" in r.text
+
+
+def test_review_page_prompt_is_textarea_with_layout_radios(tmp_path):
+    client, _ = make_test_client(tmp_path)
+    bid = seed_business(
+        generated_copy=json.dumps(VALID_COPY),
+        preview_url="https://preview.solospark.net/acme-plumbing/index.html",
+    )
+
+    r = client.get(f"/review/{bid}")
+    assert r.status_code == 200
+    # the prompt input is a multi-line textarea, not a single-line input
+    assert '<textarea name="prompt"' in r.text
+    # layout-mode radios present; AI-designed (from scratch) is the default pick
+    assert 'name="layout-mode" value="ai"' in r.text
+    assert "AI-designed (from scratch)" in r.text
+    assert 'name="layout-mode" value="classic"' in r.text
+    assert "Classic template" in r.text
+    assert re.search(r'name="layout-mode" value="ai"\s+checked', r.text)
+    assert not re.search(r'name="layout-mode" value="classic"\s+checked', r.text)
+
+
+def test_review_page_layout_radios_reflect_persisted_choice(tmp_path):
+    client, _ = make_test_client(tmp_path)
+    bid = seed_business(
+        generated_copy=json.dumps({**VALID_COPY, "layout_mode": "classic"}),
+        preview_url="https://preview.solospark.net/acme-plumbing/index.html",
+    )
+
+    r = client.get(f"/review/{bid}")
+    assert r.status_code == 200
+    # a site previously built from the classic template keeps that selection
+    assert re.search(r'name="layout-mode" value="classic"\s+checked', r.text)
+    assert not re.search(r'name="layout-mode" value="ai"\s+checked', r.text)
 
 
 # ── Gallery image upload (content_images) ────────────────────────────────────
@@ -1570,3 +1632,162 @@ def test_refine_runs_syntax_check_before_upload(tmp_path):
     assert len(calls) == 2  # refine + syntax QA pass
     b = get_business(bid)
     assert b.generated_copy_dict()["hero_headline"] == "New clean headline"
+
+
+# ── Layout mode choice (AI-designed vs classic template) ─────────────────────
+
+
+def test_generate_persists_layout_mode_from_request(tmp_path):
+    s3 = FakeS3()
+    client, _ = make_test_client(tmp_path, llm_payloads=[json.dumps(VALID_COPY)], s3=s3)
+    bid = seed_business()
+
+    r = client.post(f"/generate/{bid}?layout_mode=classic")
+    assert r.status_code == 200
+    assert r.json()["status"] == "generated"
+    assert get_business(bid).generated_copy_dict()["layout_mode"] == "classic"
+
+
+def test_generate_layout_mode_defaults_to_ai(tmp_path):
+    s3 = FakeS3()
+    client, _ = make_test_client(tmp_path, llm_payloads=[json.dumps(VALID_COPY)], s3=s3)
+    bid = seed_business()
+
+    r = client.post(f"/generate/{bid}")
+    assert r.status_code == 200
+    assert get_business(bid).generated_copy_dict()["layout_mode"] == "ai"
+
+
+def test_generate_invalid_layout_mode_falls_back_to_ai(tmp_path):
+    s3 = FakeS3()
+    client, _ = make_test_client(tmp_path, llm_payloads=[json.dumps(VALID_COPY)], s3=s3)
+    bid = seed_business()
+
+    r = client.post(f"/generate/{bid}?layout_mode=bogus")
+    assert r.status_code == 200
+    assert get_business(bid).generated_copy_dict()["layout_mode"] == "ai"
+
+
+def test_regenerate_prompt_persists_layout_mode(tmp_path):
+    s3 = FakeS3()
+    client, _ = make_test_client(tmp_path, llm_payloads=[json.dumps(VALID_COPY)], s3=s3)
+    bid = seed_business(generated_copy=json.dumps(VALID_COPY))
+
+    r = client.post(
+        f"/regenerate-prompt/{bid}?layout_mode=classic", json={"prompt": "make it bolder"}
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "regenerated"
+    assert get_business(bid).generated_copy_dict()["layout_mode"] == "classic"
+
+
+# ── Stock image fill-in (Openverse) ───────────────────────────────────────────
+
+
+def test_generate_attaches_stock_images_when_reference_has_none(tmp_path, monkeypatch):
+    import app.main as main_mod
+
+    s3 = FakeS3()
+    client, _ = make_test_client(tmp_path, llm_payloads=[json.dumps(VALID_COPY)], s3=s3)
+    bid = seed_business()  # no website → nothing to scrape
+
+    stock_urls = [f"https://stock.example/photo-{i}.jpg" for i in range(1, 6)]
+    monkeypatch.setattr(
+        main_mod, "search_stock_images",
+        lambda query, count=5, session=None: [
+            {"url": u, "license": "by"} for u in stock_urls[:count]
+        ],
+    )
+    monkeypatch.setattr(
+        main_mod, "fetch_image_bytes",
+        lambda url, http_session=None, max_bytes=1_500_000: (b"img-bytes", "image/jpeg"),
+    )
+
+    r = client.post(f"/generate/{bid}")
+    assert r.status_code == 200
+    assert r.json()["status"] == "generated"
+
+    # hero + about + 3 gallery stock photos, then the page itself
+    keys = [p["Key"] for p in s3.puts]
+    assert keys == [
+        "acme-plumbing/assets/hero.jpg",
+        "acme-plumbing/assets/about.jpg",
+        "acme-plumbing/assets/gallery-1.jpg",
+        "acme-plumbing/assets/gallery-2.jpg",
+        "acme-plumbing/assets/gallery-3.jpg",
+        "acme-plumbing/index.html",
+    ]
+
+    copy = get_business(bid).generated_copy_dict()
+    assert copy["hero_image_url"] == "assets/hero.jpg"
+    assert copy["about_images"] == ["assets/about.jpg"]
+    assert len(copy["gallery_images"]) == 3
+
+
+def test_generate_stock_fill_skips_slots_reference_already_filled(tmp_path, monkeypatch):
+    import app.main as main_mod
+
+    s3 = FakeS3()
+    client, _ = make_test_client(tmp_path, llm_payloads=[json.dumps(VALID_COPY)], s3=s3)
+    bid = seed_business(current_website="https://www.acmeplumbing.com")
+
+    monkeypatch.setattr(main_mod, "scrape_site_reference", lambda url, http_session=None: dict(REF))
+    monkeypatch.setattr(
+        main_mod, "fetch_image_bytes",
+        lambda url, http_session=None, max_bytes=1_500_000: (b"img-bytes", "image/png"),
+    )
+    searches = []
+
+    def fake_search(query, count=5, session=None):
+        searches.append((query, count))
+        return [
+            {"url": f"https://stock.example/fill-{i}.jpg", "license": "by"}
+            for i in range(count)
+        ]
+
+    monkeypatch.setattr(main_mod, "search_stock_images", fake_search)
+
+    r = client.post(f"/generate/{bid}")
+    assert r.status_code == 200
+
+    # REF supplies hero+about; only the empty gallery slot may be filled (3 photos)
+    assert len(searches) == 1
+    query, count = searches[0]
+    assert query == "plumber working on pipes and tools"
+    assert count == 3
+
+    keys = [p["Key"] for p in s3.puts]
+    assert keys == [
+        "acme-plumbing/assets/logo.png",
+        "acme-plumbing/assets/hero.jpg",
+        "acme-plumbing/assets/about.jpg",
+        "acme-plumbing/assets/gallery-1.jpg",
+        "acme-plumbing/assets/gallery-2.jpg",
+        "acme-plumbing/assets/gallery-3.jpg",
+        "acme-plumbing/index.html",
+    ]
+
+    copy = get_business(bid).generated_copy_dict()
+    # scraped hero/about are untouched; stock only fills the gallery
+    assert copy["hero_image_url"] == "assets/hero.jpg"
+    assert copy["about_images"] == ["assets/about.jpg"]
+    assert len(copy["gallery_images"]) == 3
+
+
+def test_generate_stock_search_failure_leaves_generation_intact(tmp_path, monkeypatch):
+    import app.main as main_mod
+
+    s3 = FakeS3()
+    client, _ = make_test_client(tmp_path, llm_payloads=[json.dumps(VALID_COPY)], s3=s3)
+    bid = seed_business()  # no website → every slot missing
+
+    def boom(query, count=5, session=None):
+        raise RuntimeError("openverse down")
+
+    monkeypatch.setattr(main_mod, "search_stock_images", boom)
+
+    r = client.post(f"/generate/{bid}")
+    assert r.status_code == 200
+    assert r.json()["status"] == "generated"
+    # no stock photos available → the page still deploys, just without images
+    assert [p["Key"] for p in s3.puts] == ["acme-plumbing/index.html"]

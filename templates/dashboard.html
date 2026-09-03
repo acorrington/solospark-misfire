@@ -55,7 +55,7 @@
   <table class="min-w-full text-sm">
     <thead class="bg-slate-50 text-left text-slate-500 uppercase text-xs tracking-wide">
       <tr>
-        <th class="px-4 py-3">Business</th>
+        <th class="px-4 py-3 min-w-[280px] w-[28%]">Business</th>
         <th class="px-4 py-3">Stage</th>
         <th class="px-4 py-3">Rating</th>
         <th class="px-4 py-3">Audit flags</th>
@@ -66,9 +66,14 @@
     <tbody class="divide-y divide-slate-100">
       {% for b in businesses %}
       <tr class="hover:bg-slate-50">
-        <td class="px-4 py-3">
+        <td class="px-4 py-3 min-w-[280px] w-[28%]">
           <div class="font-medium">{{ b.name }}</div>
           <div class="text-xs text-slate-400">{{ b.category or "—" }}{% if b.address %} · {{ b.address }}{% endif %}</div>
+          {% if b.contact_email %}
+          <div class="text-xs text-slate-500 mt-0.5 break-all">{{ b.contact_email }}</div>
+          {% else %}
+          <div class="text-xs font-medium text-red-600 mt-0.5">Missing Email</div>
+          {% endif %}
         </td>
         <td class="px-4 py-3">
           <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium {{ stage_colors.get(b.stage.value, 'bg-slate-200 text-slate-700') }}">

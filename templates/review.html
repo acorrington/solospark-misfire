@@ -10,24 +10,37 @@
     {% if not business.preview_url %}
     <button type="button" class="generate-btn bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-indigo-500 transition">Generate mockup</button>
     {% else %}
-    <form id="site-prompt-form" class="flex items-center gap-2">
-      <input type="text" name="prompt" placeholder="Fine-tune instructions (e.g. 'shorten the hero headline')"
-             class="w-64 border rounded px-2 py-1.5 text-sm">
-      <label class="flex items-center gap-1 whitespace-nowrap text-xs text-slate-600">
-        <input type="checkbox" id="refine-only">
-        Update current site only (no re-scrape)
-      </label>
-      <button type="submit" id="site-prompt-btn" class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded hover:bg-indigo-500 transition shrink-0">Apply</button>
-    </form>
-    <p class="text-xs text-slate-400 max-w-md text-right leading-snug">Tip: put exact new text in quotes — e.g. change the CTA button to "Book Now" — and it is applied verbatim.</p>
     <div class="flex items-center gap-3">
       <button type="button" id="regenerate-btn" class="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-indigo-500 transition">Regenerate site</button>
       <button type="button" id="delete-site-btn" class="bg-red-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-red-500 transition">Delete site</button>
     </div>
+    <form id="site-prompt-form" class="flex flex-col gap-2 w-80 max-w-full">
+      <textarea name="prompt" rows="2" placeholder="Fine-tune instructions (e.g. 'shorten the hero headline')"
+                class="w-full border rounded px-2 py-1.5 text-sm"></textarea>
+      <div class="flex items-center gap-3 justify-end">
+        <label class="flex items-center gap-1 whitespace-nowrap text-xs text-slate-600">
+          <input type="checkbox" id="refine-only">
+          Update current site only (no re-scrape)
+        </label>
+        <button type="submit" id="site-prompt-btn" class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded hover:bg-indigo-500 transition shrink-0">Apply</button>
+      </div>
+    </form>
+    <p class="text-xs text-slate-400 max-w-md text-right leading-snug">Tip: put exact new text in quotes — e.g. change the CTA button to "Book Now" — and it is applied verbatim.</p>
     {% endif %}
     {% if business.generated_copy and not business.preview_url %}
     <button type="button" id="deploy-preview-btn" class="bg-emerald-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-emerald-500 transition">Deploy preview</button>
     {% endif %}
+    <div class="flex flex-col items-end gap-1.5 text-xs">
+      <span class="text-slate-400 font-medium uppercase tracking-wide">Layout</span>
+      <label class="inline-flex items-center gap-1.5 cursor-pointer">
+        <input type="radio" name="layout-mode" value="ai" {% if layout_mode != "classic" %}checked{% endif %}>
+        AI-designed (from scratch)
+      </label>
+      <label class="inline-flex items-center gap-1.5 cursor-pointer">
+        <input type="radio" name="layout-mode" value="classic" {% if layout_mode == "classic" %}checked{% endif %}>
+        Classic template
+      </label>
+    </div>
   </div>
 </div>
 
@@ -121,6 +134,16 @@
   </div>
 </div>
 
+<script>
+// Selected layout mode ("ai" | "classic") from the header radios; sent as a
+// query param on every generate/regenerate request so the server knows which
+// section order to build.
+function layoutModeParam() {
+  var el = document.querySelector('input[name="layout-mode"]:checked');
+  return el ? "?layout_mode=" + encodeURIComponent(el.value) : "";
+}
+</script>
+
 {% if business.generated_copy and not business.preview_url %}
 <script>
 document.getElementById("deploy-preview-btn").addEventListener("click", function () {
@@ -153,7 +176,7 @@ document.getElementById("deploy-preview-btn").addEventListener("click", function
       if (placeholder) {
         placeholder.textContent = "Generating your mockup\u2026 the local LLM can take a minute.";
       }
-      fetch("/generate/{{ business.id }}", { method: "POST" })
+      fetch("/generate/{{ business.id }}" + layoutModeParam(), { method: "POST" })
         .then(function (response) {
           return response.json().then(function (data) {
             return { ok: response.ok, data: data };
@@ -198,7 +221,7 @@ document.getElementById("deploy-preview-btn").addEventListener("click", function
       btn.disabled = true;
       btn.textContent = "Regenerating\u2026";
       setStatus("Rebuilding from their current website\u2026 the local LLM can take a minute.");
-      fetch("/generate/{{ business.id }}", { method: "POST" })
+      fetch("/generate/{{ business.id }}" + layoutModeParam(), { method: "POST" })
         .then(function (response) {
           return response.json().then(function (data) {
             return { ok: response.ok, data: data };
@@ -232,7 +255,7 @@ document.getElementById("deploy-preview-btn").addEventListener("click", function
         label = "Updating current site from your instructions\u2026 no re-scrape. This can take a minute.";
         statusMsg = "Fine-tuning failed: ";
       } else {
-        endpoint = "/regenerate-prompt/{{ business.id }}";
+        endpoint = "/regenerate-prompt/{{ business.id }}" + layoutModeParam();
         label = prompt
           ? "Applying your prompt adjustment (full regeneration)\u2026 this can take a minute."
           : "Regenerating\u2026 this can take a minute.";
@@ -300,7 +323,7 @@ document.getElementById("deploy-preview-btn").addEventListener("click", function
       setStatus(prompt
         ? "Applying your instructions (full regeneration)\u2026 this can take a minute."
         : "Regenerating\u2026 this can take a minute.");
-      fetch("/regenerate-prompt/{{ business.id }}", {
+      fetch("/regenerate-prompt/{{ business.id }}" + layoutModeParam(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: prompt })

@@ -780,6 +780,42 @@ def test_resolve_layout_ignores_unknown_and_duplicate_sections():
     ]
 
 
+def test_resolve_layout_classic_mode_uses_fixed_template_order():
+    # Classic mode forces the category's fixed template order (trade profile
+    # for "Plumber"), ignoring whatever layout the LLM picked — even when the
+    # LLM's pick is otherwise valid.
+    copy = {
+        "layout": ["hero", "menu", "contact"],
+        "menu_items": [{"name": "Drain check", "description": "", "price": "$49"}],
+        "services": [{"title": "Drains", "description": "x", "icon_name": "wrench"}],
+        "about_text": "Twenty years in the trade.",
+    }
+    assert llm_engine.resolve_layout(copy, "Plumber", layout_mode="classic") == [
+        "hero", "services", "about", "cta_band", "contact",
+    ]
+
+
+def test_resolve_layout_classic_mode_still_drops_sections_without_data():
+    copy = {
+        "layout": ["hero", "menu", "contact"],  # irrelevant in classic mode
+        "menu_items": [{"name": "Drain check", "description": "", "price": "$49"}],
+    }
+    # trade default minus the data-less sections (services, about)
+    assert llm_engine.resolve_layout(copy, "Plumber", layout_mode="classic") == [
+        "hero", "cta_band", "contact",
+    ]
+
+
+def test_resolve_layout_unknown_layout_mode_treated_as_ai():
+    copy = {
+        "layout": ["hero", "menu", "contact"],
+        "menu_items": [{"name": "Margherita", "description": "", "price": "$14"}],
+    }
+    assert llm_engine.resolve_layout(copy, "Restaurant", layout_mode="bogus") == [
+        "hero", "menu", "contact",
+    ]
+
+
 def test_nav_links_for_caps_labels_and_always_ends_with_contact():
     layout = ["hero", "menu", "services", "gallery", "about", "hours_location", "cta_band", "contact"]
     assert llm_engine.nav_links_for(layout) == [

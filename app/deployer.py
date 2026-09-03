@@ -142,6 +142,7 @@ def render_site_html(
     business_data: dict,
     copy_data: dict,
     template_dir: str | None = None,
+    layout_mode: str | None = None,
 ) -> str:
     """Compile a standalone landing page for one business.
 
@@ -151,6 +152,9 @@ def render_site_html(
     optionally extended with asset references persisted at generation time:
     ``brand`` (palette), ``logo_url``, ``hero_image_url``, ``about_images``.
     Optional override: ``business_data["form_action"]`` for the lead form target.
+    ``layout_mode`` ("ai" | "classic") forces the section order; when omitted it
+    falls back to ``copy_data["layout_mode"]`` persisted at generation time,
+    then to "ai".
     """
     env = _get_env(str(template_dir or DEFAULT_TEMPLATE_DIR))
     template = env.get_template(SITE_TEMPLATE_NAME)
@@ -201,11 +205,15 @@ def render_site_html(
         "gallery_images": gallery_images,
     }
 
-    # Section composition: the LLM picks which sections appear and their order;
-    # resolve_layout normalizes it (pins hero/contact, drops data-less sections)
-    # so a restaurant leads with its menu while a plumber keeps the classic
-    # services-first flow. nav_links mirrors the resolved order for the header.
-    layout = resolve_layout(copy, business["category"])
+    # Section composition: in "ai" mode the LLM picks which sections appear and
+    # their order; in "classic" mode the category's fixed template order is used.
+    # resolve_layout normalizes either (pins hero/contact, drops data-less
+    # sections) so a restaurant leads with its menu while a plumber keeps the
+    # classic services-first flow. nav_links mirrors the resolved order.
+    mode = layout_mode or copy_data.get("layout_mode") or "ai"
+    if mode not in ("ai", "classic"):
+        mode = "ai"
+    layout = resolve_layout(copy, business["category"], mode)
 
     return template.render(
         business=business,

@@ -57,6 +57,7 @@ from .llm_engine import (
     refine_landing_copy,
 )
 from .site_ref import asset_filename, fetch_image_bytes, scrape_site_reference
+from .stock_images import image_query_for, search_stock_images
 from .models import Business, DealStage, OutreachEmail, get_db
 from .outreach import outreach_router
 
@@ -378,6 +379,7 @@ def create_app(
                 "pitch_subject": copy.get("pitch_subject", ""),
                 "pitch_body": copy.get("pitch_body", ""),
                 "payment_link": stripe_payment_link(business),
+                "layout_mode": copy.get("layout_mode") or "ai",
             },
         )
 
@@ -429,6 +431,20 @@ def create_app(
         for i, url in enumerate(gallery_candidates[:3], start=1):
             plan.append((f"gallery-{i}", url, "gallery_images"))
 
+        return _upload_asset_plan(business, plan)
+
+    def _upload_asset_plan(
+        business: Business, plan: list[tuple[str, str, str]]
+    ) -> dict[str, Any]:
+        """Download each (prefix, url, copy field) and upload it to R2 under the
+        business's slug. Returns a partial copy-dict of relative asset paths;
+        individual failures are skipped silently, and an empty plan or all
+        failures yield {}.
+
+        Shared by scraped reference assets and royalty-free stock fill-ins.
+        """
+        if not plan:
+            return {}
         assets: list[dict[str, Any]] = []
         fields: list[str] = []
         for prefix, url, field in plan:
@@ -466,6 +482,60 @@ def create_app(
             else:
                 merged[field] = path
         return merged
+
+    def _stock_image_plan(
+        business: Business, copy: dict[str, Any]
+    ) -> list[tuple[str, str, str]]:
+        """Build a download plan of royalty-free stock photos for every image
+        slot the reference site did not fill (hero / about / gallery).
+
+        One Openverse search per call; distinct commercial-license URLs are
+        assigned in order — hero first, then about, then up to three gallery
+        photos. Returns [] when nothing is missing or the search yields no
+        usable results.
+        """
+        missing_hero = not copy.get("hero_image_url")
+        missing_about = not copy.get("about_images")
+        missing_gallery = not copy.get("gallery_images")
+        if not (missing_hero or missing_about or missing_gallery):
+            return []
+        want = int(missing_hero) + int(missing_about) + (3 if missing_gallery else 0)
+        try:
+            results = search_stock_images(
+                image_query_for(business.category or ""), count=want
+            )
+        except Exception:  # noqa: BLE001 — stock lookup is strictly best-effort
+            return []
+        urls: list[str] = []
+        seen: set[str] = set()
+        for item in results:
+            url = item.get("url") if isinstance(item, dict) else None
+            if isinstance(url, str) and url.strip() and url not in seen:
+                seen.add(url)
+                urls.append(url)
+        it = iter(urls)
+        plan: list[tuple[str, str, str]] = []
+        if missing_hero:
+            if (url := next(it, None)) is not None:
+                plan.append(("hero", url, "hero_image_url"))
+        if missing_about:
+            if (url := next(it, None)) is not None:
+                plan.append(("about", url, "about_images"))
+        if missing_gallery:
+            for n in range(1, 4):
+                url = next(it, None)
+                if url is None:
+                    break
+                plan.append((f"gallery-{n}", url, "gallery_images"))
+        return plan
+
+    def _effective_layout_mode(requested: str | None, business: Business) -> str:
+        """Explicit request wins; otherwise the choice persisted on a previous
+        generation; otherwise "ai" (AI-designed layout)."""
+        if requested in ("ai", "classic"):
+            return requested
+        previous = (business.generated_copy_dict() or {}).get("layout_mode")
+        return previous if previous in ("ai", "classic") else "ai"
 
     def _merge_assets(
         copy: dict[str, Any], business: Business, ref: dict[str, Any]
@@ -529,7 +599,11 @@ def create_app(
         return preview_url, copy
 
     @app.post("/generate/{business_id}")
-    def generate(business_id: int, db: Session = Depends(get_db)):
+    def generate(
+        business_id: int,
+        layout_mode: str | None = None,
+        db: Session = Depends(get_db),
+    ):
         business = _get_business_or_404(db, business_id)
         reference = _scrape_reference(business)
         try:
@@ -544,7 +618,13 @@ def create_app(
             raise HTTPException(
                 status_code=502, detail=f"LLM generation failed: {exc}"
             ) from exc
+        # Layout mode: explicit request > previously persisted choice > "ai".
+        copy["layout_mode"] = _effective_layout_mode(layout_mode, business)
         copy = _merge_assets(copy, business, reference)
+        # Royalty-free fill-in: any image slot the reference site left empty
+        # (a no-website lead gets all of them) is filled with commercial-license
+        # stock photos from Openverse, uploaded to R2 like scraped assets.
+        copy.update(_upload_asset_plan(business, _stock_image_plan(business, copy)))
         preview_url, copy = _render_and_deploy(business, copy)
         business.set_generated_copy(copy)
         business.preview_url = preview_url
@@ -556,7 +636,10 @@ def create_app(
 
     @app.post("/regenerate-prompt/{business_id}")
     def regenerate_prompt(
-        business_id: int, payload: RegenerateRequest, db: Session = Depends(get_db)
+        business_id: int,
+        payload: RegenerateRequest,
+        layout_mode: str | None = None,
+        db: Session = Depends(get_db),
     ):
         business = _get_business_or_404(db, business_id)
         reference = _scrape_reference(business)
@@ -574,6 +657,10 @@ def create_app(
                 status_code=502, detail=f"LLM generation failed: {exc}"
             ) from exc
         copy = _merge_assets(copy, business, reference)
+        # Layout mode: explicit request > previously persisted choice > "ai".
+        copy["layout_mode"] = _effective_layout_mode(layout_mode, business)
+        # Royalty-free fill-in for image slots the reference site left empty.
+        copy.update(_upload_asset_plan(business, _stock_image_plan(business, copy)))
         # Safety net: if the operator asked for a named color but the model
         # re-emitted the old palette (or dropped it), apply the requested one.
         previous_brand = (business.generated_copy_dict() or {}).get("brand")
@@ -633,7 +720,13 @@ def create_app(
 
         # Persisted asset references stay in the bucket — carry them over so
         # the re-render keeps pointing at the same logo/hero/about objects.
-        for field in ("logo_url", "hero_image_url", "about_images"):
+        # The layout-mode choice persists with the copy for the same reason.
+        for field in (
+            "logo_url",
+            "hero_image_url",
+            "about_images",
+            "layout_mode",
+        ):
             if current.get(field):
                 refined[field] = current[field]
 

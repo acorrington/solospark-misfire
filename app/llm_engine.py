@@ -391,25 +391,32 @@ _DATA_GATES: dict[str, tuple[str, ...]] = {
 }
 
 
-def resolve_layout(copy: dict, category: str) -> list[str]:
+def resolve_layout(copy: dict, category: str, layout_mode: str = "ai") -> list[str]:
     """Resolve the final section order for rendering.
 
-    The LLM's ``layout`` is trusted when it names at least three known
-    sections including hero and contact; otherwise the category default
-    applies. Hero is always first and contact always last (the middle keeps
-    the LLM's relative order), and any section without its data is dropped so
+    In ``"ai"`` mode (the default) the LLM's ``layout`` is trusted when it
+    names at least three known sections including hero and contact; otherwise
+    the category default applies. In ``"classic"`` mode the category's fixed
+    template order (``DEFAULT_LAYOUTS``) always applies, ignoring the LLM's
+    pick — the legacy single-template behaviour.
+
+    Hero is always first and contact always last (the middle keeps the
+    source's relative order), and any section without its data is dropped so
     a page never shows an empty block.
     """
     profile = _category_profile(category)
-    raw = copy.get("layout")
-    if not isinstance(raw, list):
-        raw = []
-    known = [name for name in dict.fromkeys(raw) if name in KNOWN_SECTIONS]
-
-    if len(known) >= 3 and "hero" in known and "contact" in known:
-        layout = known[:8]
-    else:
+    if layout_mode == "classic":
         layout = list(DEFAULT_LAYOUTS[profile])
+    else:
+        raw = copy.get("layout")
+        if not isinstance(raw, list):
+            raw = []
+        known = [name for name in dict.fromkeys(raw) if name in KNOWN_SECTIONS]
+
+        if len(known) >= 3 and "hero" in known and "contact" in known:
+            layout = known[:8]
+        else:
+            layout = list(DEFAULT_LAYOUTS[profile])
 
     # Pin hero first / contact last, keep the LLM's middle order.
     middle = [name for name in layout if name not in ("hero", "contact")]
